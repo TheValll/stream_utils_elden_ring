@@ -1,0 +1,4 @@
+pillow
+pynput
+flask
+flask-cors

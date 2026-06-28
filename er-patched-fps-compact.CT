@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="46">
+  <LuaScript>
+    getMainForm().Splitter1.Visible = false;
+    getMainForm().Panel4.Visible = false;
+    getMainForm().Panel5.Visible = false;
+    getAddressList().Header.Visible = false;
+    getAddressList().Header.Sections[2].MinWidth = 0;
+    getAddressList().Header.Sections[2].MaxWidth = 0;
+    getAddressList().Header.Sections[2].Width = 0;
+    getAddressList().Header.Sections[3].MinWidth = 0;
+    getAddressList().Header.Sections[3].MaxWidth = 0;
+    getAddressList().Header.Sections[3].Width = 0;
+  </LuaScript>
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"FPS Patch [OFF]"</Description>
+      <LastState/>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+writeBytes("ER_FPS_PATCH_ENABLED", 1)
+
+local addressList = getAddressList()
+addressList.getMemoryRecordByID(1).Description = "FPS Patch [ON]"
+
+[DISABLE]
+{$lua}
+writeBytes("ER_FPS_PATCH_ENABLED", 0)
+
+local addressList = getAddressList()
+addressList.getMemoryRecordByID(1).Description = "FPS Patch [OFF]"
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>2</ID>
+      <Description>"FPS Limit"</Description>
+      <ShowAsSigned>0</ShowAsSigned>
+      <VariableType>Float</VariableType>
+      <Address>ER_FPS_CUSTOM_LIMIT</Address>
+    </CheatEntry>
+	<CheatEntry>
+      <ID>3</ID>
+      <Description>"[TOGGLE INFO]"</Description>
+      <Options moHideChildren="1"/>
+      <Color>0000FF</Color>
+      <GroupHeader>1</GroupHeader>
+      <CheatEntries>
+        <CheatEntry>
+          <ID>4</ID>
+          <Description>"- This CT requires LiveSplit + SoulSplitter active."</Description>
+          <Color>00FFFF</Color>
+          <GroupHeader>1</GroupHeader>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>5</ID>
+          <Description>"- To toggle the FPS patch, tick the box next to it."</Description>
+          <Color>00FFFF</Color>
+          <GroupHeader>1</GroupHeader>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>6</ID>
+          <Description>"- The custom FPS limit is only applied with the patch active."</Description>
+          <Color>00FFFF</Color>
+          <GroupHeader>1</GroupHeader>
+        </CheatEntry>
+        <CheatEntry>
+          <ID>7</ID>
+          <Description>"- Setting the FPS limit to 0 means it will use the default limit."</Description>
+          <Color>00FFFF</Color>
+          <GroupHeader>1</GroupHeader>
+        </CheatEntry>
+      </CheatEntries>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+</CheatTable>

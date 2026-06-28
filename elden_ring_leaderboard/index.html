@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elden Ring Leaderboard - LiveSplit Final</title>
+    <style>
+      :root {
+        --text: #e2e8f0;
+      }
+      body {
+        background: transparent;
+        color: var(--text);
+        margin: 0;
+        padding: 8px;
+      }
+      canvas {
+        display: block;
+        width: 760px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="board"></canvas>
+    <script>
+      const GAME_ID = "nd28z0ed";
+      const CATEGORY_NAME = "Any%";
+      const SUBCATEGORY_LABEL = "Glitchless";
+      const SCROLL_INTERVAL = 3000;
+      const FADE_DURATION = 500;
+
+      const LIVESPLIT_API_URL = "http://localhost:8084/api/bestpossibletime";
+      const LIVESPLIT_FETCH_INTERVAL = 500;
+      const THEVALL_COUNTRY = "fr";
+
+      const canvas = document.getElementById("board");
+      const ctx = canvas.getContext("2d");
+
+      let allRuns = [];
+      let baseSpeedrunData = [];
+      let currentScrollIndex = 0;
+      let fadeProgress = 1;
+      let timeInState = 0;
+      let isFading = false;
+
+      let liveSplitConnected = false;
+      let bestPossibleTime = null;
+      let rainbowTime = 0;
+
+      const FONT_SIZE = 24;
+      const ROW_H = 38;
+      const START_Y = 40;
+      const SEPARATOR_GAP = 15;
+      const FLAG_W = 24,
+        FLAG_H = 18,
+        FLAG_Y_OFFSET = 20;
+      const MEDAL_W = 20,
+        MEDAL_H = 20,
+        MEDAL_Y_OFFSET = 20;
+
+      const STROKE_COLOR = "black";
+      const STROKE_WIDTH = 4;
+
+      const flagImgCache = new Map();
+      const medalCache = new Map();
+      const medalIcons = {
+        1: "https://www.speedrun.com/images/1st.png",
+        2: "https://www.speedrun.com/images/2nd.png",
+        3: "https://www.speedrun.com/images/3rd.png",
+      };
+
+      function flagUrl(code) {
+        return `https://flagcdn.com/w40/${code.toLowerCase().replace('/', '-')}.png`;
+      }
+
+      async function loadFlagImage(code) {
+        if (!code) return null;
+        if (flagImgCache.has(code.toLowerCase()))
+          return flagImgCache.get(code.toLowerCase());
+        return new Promise((res) => {
+          const img = new Image();
+          img.onload = () => {
+            flagImgCache.set(code.toLowerCase(), img);
+            res(img);
+          };
+          img.onerror = () => res(null);
+          img.src = flagUrl(code);
+        });
+      }
+
+      async function loadMedal(rank) {
+        if (medalCache.has(rank)) return medalCache.get(rank);
+        return new Promise((res) => {
+          const img = new Image();
+          img.onload = () => {
+            medalCache.set(rank, img);
+            res(img);
+          };
+          img.onerror = () => res(null);
+          img.src = medalIcons[rank];
+        });
+      }
+
+      function drawRoundedImage(img, x, y, w, h, r) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, x, y, w, h);
+        ctx.restore();
+      }
+
+      function parseTimeToSeconds(timeStr) {
+        const parts = timeStr.split(":");
+        let seconds = 0;
+        if (parts.length === 3) {
+          seconds =
+            parseInt(parts[0]) * 3600 +
+            parseInt(parts[1]) * 60 +
+            parseFloat(parts[2]);
+        } else if (parts.length === 2) {
+          seconds = parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+        } else {
+          seconds = parseFloat(parts[0]);
+        }
+        return seconds;
+      }
+
+      function formatPrimaryTime(sec) {
+        const h = Math.floor(sec / 3600),
+          m = Math.floor((sec % 3600) / 60),
+          s = Math.floor(sec % 60);
+        return h > 0
+          ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+          : `${m}:${String(s).padStart(2, "0")}`;
+      }
+
+      function strokeAndFillText(text, x, y) {
+        ctx.strokeStyle = STROKE_COLOR;
+        ctx.lineWidth = STROKE_WIDTH;
+        ctx.lineJoin = "round";
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+      }
+
+      function getRainbowColor(offset = 0) {
+        const hue = ((rainbowTime / 2500 + offset) % 1) * 360;
+        return `hsl(${hue}, 100%, 70%)`;
+      }
+
+      function drawRunner(r, rowIndex, colRank, maxRankW, timeX, alpha) {
+        const y = START_Y + rowIndex * ROW_H;
+        const color =
+          rowIndex === 0
+            ? "#ffd700"
+            : rowIndex === 1
+              ? "#c0c0c0"
+              : rowIndex === 2
+                ? "#cd7f32"
+                : "#9fb4ca";
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        const FONT_STYLE = `700 ${FONT_SIZE}px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+        ctx.font = FONT_STYLE;
+
+        ctx.textAlign = "right";
+        const rankX = colRank + maxRankW;
+
+        if (r.isLiveTheVall) {
+          ctx.fillStyle = getRainbowColor(0);
+        } else {
+          ctx.fillStyle = color;
+        }
+
+        if (medalIcons[r.rank] && medalCache.get(r.rank) && !r.isLiveTheVall) {
+          ctx.drawImage(
+            medalCache.get(r.rank),
+            rankX - MEDAL_W,
+            y - MEDAL_Y_OFFSET,
+            MEDAL_W,
+            MEDAL_H,
+          );
+        } else {
+          strokeAndFillText(`#${r.rank}`, rankX, y);
+        }
+
+        ctx.textAlign = "left";
+        let nameX = rankX + 15;
+        if (r.flagImg) {
+          drawRoundedImage(
+            r.flagImg,
+            nameX,
+            y - FLAG_Y_OFFSET,
+            FLAG_W,
+            FLAG_H,
+            5,
+          );
+          nameX += FLAG_W + 10;
+        }
+
+        if (r.isLiveTheVall) {
+          const width = ctx.measureText(r.player).width;
+          const grad = ctx.createLinearGradient(nameX, y, nameX + width, y);
+          const hue1 = ((rainbowTime / 2500) % 1) * 360;
+          const hue2 = ((rainbowTime / 2500 + 0.3) % 1) * 360;
+          const hue3 = ((rainbowTime / 2500 + 0.6) % 1) * 360;
+          grad.addColorStop(0, `hsl(${hue1}, 100%, 70%)`);
+          grad.addColorStop(0.5, `hsl(${hue2}, 100%, 70%)`);
+          grad.addColorStop(1, `hsl(${hue3}, 100%, 70%)`);
+          ctx.fillStyle = grad;
+        } else if (r.nameStyle?.style === "gradient") {
+          const width = ctx.measureText(r.player).width;
+          const grad = ctx.createLinearGradient(nameX, y, nameX + width, y);
+          grad.addColorStop(0, r.nameStyle["color-from"]?.dark || "#e2e8f0");
+          grad.addColorStop(1, r.nameStyle["color-to"]?.dark || "#e2e8f0");
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle =
+            r.nameStyle?.color?.dark || r.nameStyle?.color?.light || "#e2e8f0";
+        }
+        strokeAndFillText(r.player, nameX, y);
+
+        ctx.textAlign = "right";
+
+        if (r.isLiveTheVall) {
+          ctx.fillStyle = getRainbowColor(0.6);
+        } else {
+          ctx.fillStyle = color;
+        }
+
+        strokeAndFillText(r.time, timeX, y);
+
+        ctx.restore();
+      }
+
+      function drawSeparatorLine(y, colRank, timeX) {
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(colRank, Math.floor(y) + 0.5);
+        ctx.lineTo(timeX, Math.floor(y) + 0.5);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function draw() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 760 * dpr;
+        canvas.height = (12 * ROW_H + 80) * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, 760, canvas.height);
+
+        if (allRuns.length === 0) return;
+
+        const FONT_BASE = `700 ${FONT_SIZE}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.font = FONT_BASE;
+
+        let maxNameAndFlagWidth = 0;
+        allRuns.forEach((r) => {
+          const w =
+            ctx.measureText(r.player).width + (r.flagImg ? FLAG_W + 10 : 0);
+          if (w > maxNameAndFlagWidth) maxNameAndFlagWidth = w;
+        });
+
+        const maxRankW = 60;
+        const timeX = Math.min(
+          740,
+          12 + maxRankW + 15 + maxNameAndFlagWidth + 100,
+        );
+
+        allRuns
+          .slice(0, 3)
+          .forEach((r, i) => drawRunner(r, i, 12, maxRankW, timeX, 1));
+
+        const scrollRuns = allRuns.slice(3);
+        for (let i = 0; i < 7; i++) {
+          const idx = currentScrollIndex + i;
+          if (scrollRuns[idx])
+            drawRunner(
+              scrollRuns[idx],
+              3 + i,
+              12,
+              maxRankW,
+              timeX,
+              fadeProgress,
+            );
+        }
+
+        if (bestPossibleTime) {
+          const lastRowY = START_Y + 9 * ROW_H;
+          const bottomLineY = START_Y + 10 * ROW_H + SEPARATOR_GAP;
+          const separatorY =
+            lastRowY + (bottomLineY - lastRowY - FONT_SIZE) / 2 + 5;
+
+          drawSeparatorLine(separatorY, 12, timeX);
+
+          const theVallRun = allRuns.find((r) => r.isLiveTheVall);
+
+          if (theVallRun) {
+            ctx.save();
+
+            const FONT_STYLE = `700 ${FONT_SIZE}px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+            ctx.font = FONT_STYLE;
+
+            ctx.textAlign = "right";
+            ctx.fillStyle = getRainbowColor(0);
+            const rankX = 12 + maxRankW;
+            strokeAndFillText(`#${theVallRun.rank}`, rankX, bottomLineY);
+
+            ctx.textAlign = "left";
+            let nameX = rankX + 15;
+            if (theVallRun.flagImg) {
+              drawRoundedImage(
+                theVallRun.flagImg,
+                nameX,
+                bottomLineY - FLAG_Y_OFFSET,
+                FLAG_W,
+                FLAG_H,
+                5,
+              );
+              nameX += FLAG_W + 10;
+            }
+
+            const width = ctx.measureText(theVallRun.player).width;
+            const grad = ctx.createLinearGradient(
+              nameX,
+              bottomLineY,
+              nameX + width,
+              bottomLineY,
+            );
+            const hue1 = ((rainbowTime / 2500) % 1) * 360;
+            const hue2 = ((rainbowTime / 2500 + 0.3) % 1) * 360;
+            const hue3 = ((rainbowTime / 2500 + 0.6) % 1) * 360;
+            grad.addColorStop(0, `hsl(${hue1}, 100%, 70%)`);
+            grad.addColorStop(0.5, `hsl(${hue2}, 100%, 70%)`);
+            grad.addColorStop(1, `hsl(${hue3}, 100%, 70%)`);
+            ctx.fillStyle = grad;
+            strokeAndFillText(theVallRun.player, nameX, bottomLineY);
+
+            ctx.textAlign = "right";
+            ctx.fillStyle = getRainbowColor(0.6);
+            strokeAndFillText(theVallRun.time, timeX, bottomLineY);
+
+            ctx.restore();
+          }
+        }
+      }
+
+      function animate(timestamp) {
+        if (!lastTimestamp) lastTimestamp = timestamp;
+        const delta = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+
+        rainbowTime = timestamp;
+
+        if (allRuns.length > 3) {
+          if (isFading) {
+            fadeProgress -= delta / FADE_DURATION;
+            if (fadeProgress <= 0) {
+              fadeProgress = 0;
+              currentScrollIndex =
+                (currentScrollIndex + 7) % (allRuns.length - 3);
+              isFading = false;
+              timeInState = 0;
+            }
+          } else {
+            fadeProgress = Math.min(1, fadeProgress + delta / FADE_DURATION);
+            if (fadeProgress === 1) {
+              timeInState += delta;
+              if (timeInState >= SCROLL_INTERVAL) isFading = true;
+            }
+          }
+        }
+        draw();
+        requestAnimationFrame(animate);
+      }
+      let lastTimestamp = 0;
+
+      async function rebuildLeaderboard() {
+        let runs = [...baseSpeedrunData];
+
+        if (bestPossibleTime !== null) {
+          const parsedSeconds = parseTimeToSeconds(bestPossibleTime);
+
+          const theVallEntry = {
+            rank: 0,
+            player: "TheVall",
+            nameStyle: null,
+            country: THEVALL_COUNTRY,
+            time: formatPrimaryTime(parsedSeconds),
+            timeSeconds: parsedSeconds,
+            flagImg: await loadFlagImage(THEVALL_COUNTRY),
+            isLiveTheVall: true,
+          };
+          runs.push(theVallEntry);
+        }
+
+        runs.sort((a, b) => a.timeSeconds - b.timeSeconds);
+        runs.forEach((run, idx) => {
+          run.rank = idx + 1;
+        });
+
+        allRuns = runs;
+      }
+
+      async function loadTop() {
+        try {
+          const gameData = await fetch(
+            `https://www.speedrun.com/api/v1/games/${GAME_ID}?embed=categories.variables`,
+          ).then((r) => r.json());
+          const cat = gameData.data.categories.data.find(
+            (c) => c.name === CATEGORY_NAME,
+          );
+          const sub = cat.variables.data.find((v) => v["is-subcategory"]);
+          const valId = Object.keys(sub.values.values).find(
+            (k) => sub.values.values[k].label === SUBCATEGORY_LABEL,
+          );
+          const lb = await fetch(
+            `https://www.speedrun.com/api/v1/leaderboards/${GAME_ID}/category/${cat.id}?var-${sub.id}=${valId}&top=200&embed=players`,
+          ).then((r) => r.json());
+
+          const pmap = new Map(lb.data.players.data.map((p) => [p.id, p]));
+          baseSpeedrunData = await Promise.all(
+            lb.data.runs.map(async (entry, i) => {
+              const p = pmap.get(entry.run.players[0].id);
+              const timeStr = formatPrimaryTime(entry.run.times.primary_t);
+              return {
+                rank: entry.place,
+                player: p?.names?.international || p?.name || "Unknown",
+                nameStyle: p?.["name-style"],
+                country: p?.location?.country?.code,
+                time: timeStr,
+                timeSeconds: entry.run.times.primary_t,
+                flagImg: await loadFlagImage(p?.location?.country?.code),
+                isLiveTheVall: false,
+              };
+            }),
+          );
+
+          await Promise.all([1, 2, 3].map(loadMedal));
+          await rebuildLeaderboard();
+
+          if (lastTimestamp === 0) requestAnimationFrame(animate);
+        } catch (e) {}
+      }
+
+      async function fetchBestPossibleTime() {
+        try {
+          const response = await fetch(LIVESPLIT_API_URL);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+
+          if (data.success && data.time) {
+            const previousBPT = bestPossibleTime;
+            bestPossibleTime = data.time;
+
+            if (!liveSplitConnected) {
+              liveSplitConnected = true;
+            }
+
+            if (previousBPT !== bestPossibleTime) {
+              await rebuildLeaderboard();
+            }
+          } else {
+            if (liveSplitConnected) {
+              liveSplitConnected = false;
+            }
+          }
+        } catch (error) {
+          if (liveSplitConnected) {
+            liveSplitConnected = false;
+          }
+        }
+      }
+
+      loadTop();
+      setInterval(loadTop, 3600000);
+      setInterval(fetchBestPossibleTime, LIVESPLIT_FETCH_INTERVAL);
+      fetchBestPossibleTime();
+    </script>
+  </body>
+</html>
