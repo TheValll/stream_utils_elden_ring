@@ -1,22 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<CheatTable CheatEngineTableVersion="46">
-  <LuaScript>
-    getMainForm().Splitter1.Visible = false;
-    getMainForm().Panel4.Visible = false;
-    getMainForm().Panel5.Visible = false;
-    getAddressList().Header.Visible = false;
-    getAddressList().Header.Sections[2].MinWidth = 0;
-    getAddressList().Header.Sections[2].MaxWidth = 0;
-    getAddressList().Header.Sections[2].Width = 0;
-    getAddressList().Header.Sections[3].MinWidth = 0;
-    getAddressList().Header.Sections[3].MaxWidth = 0;
-    getAddressList().Header.Sections[3].Width = 0;
-  </LuaScript>
+<CheatTable CheatEngineTableVersion="52">
   <CheatEntries>
     <CheatEntry>
       <ID>1</ID>
       <Description>"FPS Patch [OFF]"</Description>
-      <LastState/>
       <VariableType>Auto Assembler Script</VariableType>
       <AssemblerScript>[ENABLE]
 {$lua}
@@ -32,6 +19,15 @@ writeBytes("ER_FPS_PATCH_ENABLED", 0)
 local addressList = getAddressList()
 addressList.getMemoryRecordByID(1).Description = "FPS Patch [OFF]"
 </AssemblerScript>
+      <Hotkeys>
+        <Hotkey>
+          <Action>Toggle Activation</Action>
+          <Keys>
+            <Key>220</Key>
+          </Keys>
+          <ID>0</ID>
+        </Hotkey>
+      </Hotkeys>
     </CheatEntry>
     <CheatEntry>
       <ID>2</ID>
@@ -40,7 +36,7 @@ addressList.getMemoryRecordByID(1).Description = "FPS Patch [OFF]"
       <VariableType>Float</VariableType>
       <Address>ER_FPS_CUSTOM_LIMIT</Address>
     </CheatEntry>
-	<CheatEntry>
+    <CheatEntry>
       <ID>3</ID>
       <Description>"[TOGGLE INFO]"</Description>
       <Options moHideChildren="1"/>
@@ -75,4 +71,16 @@ addressList.getMemoryRecordByID(1).Description = "FPS Patch [OFF]"
     </CheatEntry>
   </CheatEntries>
   <UserdefinedSymbols/>
+  <LuaScript>getMainForm().Splitter1.Visible = false;
+    getMainForm().Panel4.Visible = false;
+    getMainForm().Panel5.Visible = false;
+    getAddressList().Header.Visible = false;
+    getAddressList().Header.Sections[2].MinWidth = 0;
+    getAddressList().Header.Sections[2].MaxWidth = 0;
+    getAddressList().Header.Sections[2].Width = 0;
+    getAddressList().Header.Sections[3].MinWidth = 0;
+    getAddressList().Header.Sections[3].MaxWidth = 0;
+    getAddressList().Header.Sections[3].Width = 0;
+  
+</LuaScript>
 </CheatTable>

@@ -1,11 +1,11 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <Layout version="1.6.1">
   <Mode>Horizontal</Mode>
-  <X>419</X>
-  <Y>56</Y>
+  <X>2606</X>
+  <Y>162</Y>
   <VerticalWidth>-1</VerticalWidth>
   <VerticalHeight>-1</VerticalHeight>
-  <HorizontalWidth>2004</HorizontalWidth>
+  <HorizontalWidth>1862</HorizontalWidth>
   <HorizontalHeight>48</HorizontalHeight>
   <Settings>
     <TextColor>FFFFFFFF</TextColor>
