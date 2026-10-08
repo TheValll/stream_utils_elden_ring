@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Deezer Overlay Bridge
 // @namespace    local.deezer.overlay
-// @version      1.2
+// @version      1.4
 // @description  Envoie le morceau Deezer en cours au widget Python (overlay.py)
 // @match        https://www.deezer.com/*
 // @match        https://deezer.com/*
@@ -58,8 +58,12 @@
         const remEl = document.querySelector('[data-testid="remaining_time"]');
         if (elEl && remEl) {
             const elapsed = parseTime(elEl.textContent);
-            const remaining = parseTime(remEl.textContent);
-            const duration = elapsed + remaining;
+            const rightTime = remEl.textContent.trim();
+            // Deezer shows the total duration without a minus sign, or the
+            // remaining time as a negative countdown.
+            const rightSeconds = parseTime(rightTime.replace(/^[−-]/, ""));
+            const duration = /^[−-]/.test(rightTime)
+                ? elapsed + rightSeconds : rightSeconds;
             if (duration > 0) return { elapsed: elapsed, duration: duration };
         }
 
@@ -143,6 +147,7 @@
             cover: meta.cover,
             elapsed: prog.elapsed,
             duration: prog.duration,
+            progressVersion: 2,
             playing: isPlaying(),
         };
 

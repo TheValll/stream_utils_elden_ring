@@ -55,6 +55,28 @@ state = {
     "stamp": 0.0,
 }
 state_lock = threading.Lock()
+progress_history = {"track": None, "elapsed": 0.0, "duration": 0.0, "legacy": False}
+
+
+def normalize_progress(track, elapsed, duration, version=None):
+    """Correct old bridge versions that add elapsed time to total duration."""
+    elapsed = max(0.0, elapsed)
+    duration = max(0.0, duration)
+    if track != progress_history["track"]:
+        progress_history.update(track=track, elapsed=elapsed, duration=duration, legacy=False)
+    elif version is None:
+        elapsed_change = elapsed - progress_history["elapsed"]
+        duration_change = duration - progress_history["duration"]
+        if (elapsed_change >= 1.0 and duration_change >= 1.0
+                and abs(duration_change - elapsed_change) <= 1.0):
+            progress_history["legacy"] = True
+        progress_history.update(elapsed=elapsed, duration=duration)
+    else:
+        progress_history.update(elapsed=elapsed, duration=duration, legacy=False)
+
+    if progress_history["legacy"]:
+        duration = max(elapsed, duration - elapsed)
+    return elapsed, duration
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -80,13 +102,16 @@ class Handler(BaseHTTPRequestHandler):
             state["artist"] = data.get("artist") or ""
             state["cover"] = data.get("cover") or ""
             try:
-                state["elapsed"] = float(data.get("elapsed") or 0)
+                elapsed = float(data.get("elapsed") or 0)
             except (TypeError, ValueError):
-                state["elapsed"] = 0.0
+                elapsed = 0.0
             try:
-                state["duration"] = float(data.get("duration") or 0)
+                duration = float(data.get("duration") or 0)
             except (TypeError, ValueError):
-                state["duration"] = 0.0
+                duration = 0.0
+            state["elapsed"], state["duration"] = normalize_progress(
+                (state["title"], state["artist"]), elapsed, duration,
+                data.get("progressVersion"))
             state["playing"] = bool(data.get("playing"))
             state["stamp"] = _now()
 
